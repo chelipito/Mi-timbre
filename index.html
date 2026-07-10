@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Terminal de acceso</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void: #0a0e14;
+    --panel: #10161f;
+    --panel-edge: #1c2530;
+    --cyan: #4dd8e8;
+    --cyan-dim: rgba(77,216,232,0.28);
+    --amber: #e8a23d;
+    --text: #d9e4ea;
+    --dim: #5c6b78;
+    --danger: #e8615a;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{height:100%; margin:0;}
+  body{
+    background: radial-gradient(ellipse 100% 60% at 50% 0%, rgba(77,216,232,0.07), transparent 60%), var(--void);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+    position:relative;
+    height:100vh;
+  }
+  .scanlines{
+    position:absolute; inset:0;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,0.015) 0px, transparent 1px, transparent 3px);
+    pointer-events:none;
+    z-index:5;
+  }
+
+  .app{
+    width: 100%;
+    max-width: 420px;
+    height: 100%;
+    max-height: 820px;
+    display:flex;
+    flex-direction:column;
+    position:relative;
+  }
+
+  /* --- Top readout bar --- */
+  .readout{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding: 18px 22px 14px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    color: var(--dim);
+    text-transform:uppercase;
+  }
+  .readout .dot{
+    display:inline-block;
+    width:6px; height:6px;
+    border-radius:50%;
+    background: var(--cyan);
+    margin-right:6px;
+    box-shadow: 0 0 6px var(--cyan);
+    animation: blink 2.4s ease-in-out infinite;
+  }
+  @keyframes blink{ 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+  /* --- Center stage --- */
+  .stage{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding: 0 30px;
+    text-align:center;
+    transition: transform 0.4s ease, opacity 0.4s ease;
+  }
+  .stage.receded{
+    transform: translateY(-18px) scale(0.94);
+    opacity: 0.55;
+  }
+
+  h1{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:600;
+    font-size: 22px;
+    margin: 26px 0 6px;
+    letter-spacing: 0.3px;
+  }
+  .sub{
+    font-size: 13.5px;
+    color: var(--dim);
+    max-width: 260px;
+    line-height:1.5;
+    margin: 0;
+  }
+
+  /* --- Iris button --- */
+  .iris-wrap{
+    position:relative;
+    width: 180px;
+    height: 180px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .iris-ring{
+    position:absolute;
+    border-radius:50%;
+    border: 1px solid var(--panel-edge);
+  }
+  .iris-ring.r1{ width:180px; height:180px; }
+  .iris-ring.r2{ width:150px; height:150px; border-color: var(--cyan-dim); }
+  .iris-ring.spin{
+    border-top-color: var(--cyan);
+    border-right-color: var(--cyan);
+    animation: spin 3.2s linear infinite;
+  }
+  @keyframes spin{ to{ transform: rotate(360deg); } }
+
+  button.core{
+    position:relative;
+    width: 108px;
+    height: 108px;
+    border-radius: 50%;
+    border: 1px solid var(--cyan-dim);
+    background: radial-gradient(circle at 40% 35%, #16222a, var(--panel) 70%);
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    box-shadow: 0 0 0 0 var(--cyan-dim), inset 0 0 20px rgba(77,216,232,0.08);
+    transition: transform 0.15s ease, box-shadow 0.3s ease;
+  }
+  button.core:active{ transform: scale(0.95); }
+  button.core.armed{
+    box-shadow: 0 0 0 6px var(--cyan-dim), inset 0 0 24px rgba(77,216,232,0.25);
+    border-color: var(--cyan);
+  }
+  .core svg{ width:36px; height:36px; stroke: var(--cyan); fill:none; stroke-width:1.4; }
+
+  .pulse-ring{
+    position:absolute;
+    border-radius:50%;
+    border: 1px solid var(--cyan);
+    opacity:0;
+  }
+  .pulse-ring.go{ animation: pulseOut 1s ease-out; }
+  @keyframes pulseOut{
+    0%{ width:108px; height:108px; opacity:0.7; }
+    100%{ width:200px; height:200px; opacity:0; }
+  }
+
+  .status-line{
+    margin-top: 26px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    color: var(--dim);
+    min-height: 16px;
+  }
+  .status-line.ok{ color: var(--cyan); }
+
+  /* --- Chat drawer --- */
+  .drawer{
+    position:absolute;
+    left:0; right:0; bottom:0;
+    height: 0;
+    background: var(--panel);
+    border-top: 1px solid var(--panel-edge);
+    border-radius: 18px 18px 0 0;
+    overflow:hidden;
+    transition: height 0.45s cubic-bezier(.2,.8,.2,1);
+    display:flex;
+    flex-direction:column;
+    z-index:10;
+  }
+  .drawer.open{ height: 62%; }
+
+  .drawer-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--panel-edge);
+    flex-shrink:0;
+  }
+  .drawer-head .label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    color: var(--cyan);
+    text-transform:uppercase;
+  }
+  .drawer-head .label .dot{
+    display:inline-block; width:6px; height:6px; border-radius:50%;
+    background: var(--cyan); margin-right:7px; box-shadow:0 0 6px var(--cyan);
+  }
+
+  .log{
+    flex:1;
+    overflow-y:auto;
+    padding: 14px 18px;
+    display:flex;
+    flex-direction:column;
+    gap: 10px;
+  }
+  .bubble{
+    max-width: 82%;
+    padding: 9px 13px;
+    border-radius: 10px;
+    font-size: 13.5px;
+    line-height:1.4;
+  }
+  .bubble .t{
+    display:block;
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 9.5px;
+    letter-spacing:0.5px;
+    color: rgba(0,0,0,0.35);
+    margin-top: 3px;
+  }
+  .bubble.me{
+    align-self:flex-end;
+    background: var(--cyan);
+    color: #05171b;
+    border-bottom-right-radius: 3px;
+  }
+  .bubble.them{
+    align-self:flex-start;
+    background: #1a222c;
+    border: 1px solid var(--panel-edge);
+    color: var(--text);
+    border-bottom-left-radius: 3px;
+  }
+  .bubble.them .t{ color: var(--dim); }
+  .bubble.sys{
+    align-self:center;
+    background: transparent;
+    color: var(--dim);
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 11px;
+    text-align:center;
+  }
+
+  .composer{
+    display:flex;
+    gap: 8px;
+    padding: 12px 14px;
+    border-top: 1px solid var(--panel-edge);
+    flex-shrink:0;
+  }
+  .composer input{
+    flex:1;
+    background: var(--void);
+    border: 1px solid var(--panel-edge);
+    border-radius: 10px;
+    padding: 11px 13px;
+    color: var(--text);
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size: 14px;
+    outline:none;
+  }
+  .composer input:focus{ border-color: var(--cyan); }
+  .composer button{
+    width: 42px;
+    border-radius: 10px;
+    border: 1px solid var(--cyan-dim);
+    background: var(--cyan);
+    color: #05171b;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+  }
+  .composer button svg{ width:18px; height:18px; }
+
+  .log::-webkit-scrollbar{ width:4px; }
+  .log::-webkit-scrollbar-thumb{ background: var(--panel-edge); border-radius:2px; }
+</style>
+</head>
+<body>
+
+<div class="scanlines"></div>
+<div class="app">
+
+  <div class="readout">
+    <span><span class="dot"></span>TERMINAL // STANDBY</span>
+    <span id="clock">--:--</span>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="iris-wrap">
+      <div class="pulse-ring" id="pulse"></div>
+      <div class="iris-ring r1"></div>
+      <div class="iris-ring r2 spin"></div>
+      <button class="core" id="ringBtn" aria-label="Anunciar llegada">
+        <svg viewBox="0 0 24 24"><path d="M12 2C10.9 2 10 2.9 10 4V4.29C7.13 5.14 5 7.82 5 11V16L3 18V19H21V18L19 16V11C19 7.82 16.87 5.14 14 4.29V4C14 2.9 13.1 2 12 2ZM10 21C10 22.1 10.9 23 12 23C13.1 23 14 22.1 14 21H10Z"/></svg>
+      </button>
+    </div>
+    <h1>Anunciar llegada</h1>
+    <p class="sub">Toca el sensor para avisar que estás en la puerta.</p>
+    <div class="status-line" id="statusLine">esperando activación</div>
+  </div>
+
+  <div class="drawer" id="drawer">
+    <div class="drawer-head">
+      <span class="label"><span class="dot"></span>canal abierto</span>
+    </div>
+    <div class="log" id="log"></div>
+    <div class="composer">
+      <input type="text" id="msgInput" placeholder="Escribe un mensaje..." maxlength="200">
+      <button id="sendBtn" aria-label="Enviar">
+        <svg viewBox="0 0 24 24" fill="#05171b"><path d="M3 20V4L22 12L3 20ZM5 17L15.85 12L5 7V10.5L11 12L5 13.5V17Z"/></svg>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // ============================================================
+  const TOPIC_TO_OWNER   = "samperladulce-7f3k9";
+  const TOPIC_TO_VISITOR = "samperladulce-7f3k9-reply";
+  // ============================================================
+
+  const stage      = document.getElementById('stage');
+  const ringBtn     = document.getElementById('ringBtn');
+  const pulse       = document.getElementById('pulse');
+  const statusLine  = document.getElementById('statusLine');
+  const drawer      = document.getElementById('drawer');
+  const log         = document.getElementById('log');
+  const msgInput    = document.getElementById('msgInput');
+  const sendBtn     = document.getElementById('sendBtn');
+  const clock       = document.getElementById('clock');
+
+  function tick(){
+    clock.textContent = new Date().toLocaleTimeString('es', {hour:'2-digit', minute:'2-digit'});
+  }
+  tick(); setInterval(tick, 15000);
+
+  function addBubble(text, cls, time){
+    const b = document.createElement('div');
+    b.className = 'bubble ' + cls;
+    if(cls === 'sys'){
+      b.textContent = text;
+    } else {
+      b.innerHTML = escapeHtml(text) + '<span class="t">' + (time || nowStr()) + '</span>';
+    }
+    log.appendChild(b);
+    log.scrollTop = log.scrollHeight;
+  }
+  function escapeHtml(s){
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function nowStr(){
+    return new Date().toLocaleTimeString('es', {hour:'2-digit', minute:'2-digit'});
+  }
+
+  async function publish(topic, {title, message, tags, priority}){
+    const params = new URLSearchParams();
+    if(title) params.set('title', title);
+    if(tags) params.set('tags', tags);
+    if(priority) params.set('priority', priority);
+    params.set('message', message);
+    const resp = await fetch(`https://ntfy.sh/${topic}?${params.toString()}`, { method:'POST' });
+    if(!resp.ok) throw new Error('send failed');
+  }
+
+  let rung = false;
+
+  ringBtn.addEventListener('click', async () => {
+    pulse.classList.remove('go'); void pulse.offsetWidth; pulse.classList.add('go');
+    ringBtn.classList.add('armed');
+    statusLine.textContent = "transmitiendo...";
+    statusLine.classList.remove('ok');
+
+    try {
+      await publish(TOPIC_TO_OWNER, {
+        title: 'Tocan el timbre',
+        message: 'Alguien está en la puerta',
+        tags: 'bellhop_bell',
+        priority: 'urgent'
+      });
+      statusLine.textContent = "conectado — pueden escribirte abajo";
+      statusLine.classList.add('ok');
+
+      if(!rung){
+        rung = true;
+        stage.classList.add('receded');
+        addBubble('Timbre activado. Escribe si quieres avisar algo más.', 'sys');
+        drawer.classList.add('open');
+      }
+    } catch(err){
+      statusLine.textContent = "no se pudo enviar, intenta de nuevo";
+    }
+  });
+
+  async function sendMessage(){
+    const text = msgInput.value.trim();
+    if(!text) return;
+    msgInput.value = '';
+    addBubble(text, 'me');
+    try {
+      await publish(TOPIC_TO_OWNER, { message: text, title: 'Mensaje del visitante', tags: 'speech_balloon' });
+    } catch(err){
+      addBubble('No se pudo enviar este mensaje.', 'sys');
+    }
+  }
+  sendBtn.addEventListener('click', sendMessage);
+  msgInput.addEventListener('keydown', e => { if(e.key === 'Enter') sendMessage(); });
+
+  // Escuchar respuestas del propietario en tiempo real
+  function connectReplies(){
+    try {
+      const es = new EventSource(`https://ntfy.sh/${TOPIC_TO_VISITOR}/sse`);
+      es.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(ev.data);
+          if(data.event === 'message' && data.message){
+            if(!rung){
+              rung = true;
+              stage.classList.add('receded');
+              drawer.classList.add('open');
+            }
+            addBubble(data.message, 'them', new Date(data.time*1000).toLocaleTimeString('es', {hour:'2-digit', minute:'2-digit'}));
+          }
+        } catch(e){}
+      };
+    } catch(e){}
+  }
+  connectReplies();
+</script>
+
+</body>
+</html>
